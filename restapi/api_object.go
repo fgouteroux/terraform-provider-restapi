@@ -67,6 +67,10 @@ func NewAPIObject(i_client *api_client, opts *apiObjectOpts) (*api_object, error
 		opts.id_attribute = i_client.id_attribute
 	}
 
+	if opts.update_method == "" {
+		opts.update_method = i_client.update_method
+	}
+
 	if opts.post_path == "" {
 		opts.post_path = opts.path
 	}
@@ -278,7 +282,7 @@ func (obj *api_object) update_object() error {
 	}
 
 	b, _ := json.Marshal(obj.data)
-	res_str, err := obj.api_client.send_request(obj.api_client.update_method, strings.Replace(obj.put_path, "{id}", obj.id, -1), string(b))
+	res_str, err := obj.api_client.send_request(obj.update_method, strings.Replace(obj.put_path, "{id}", obj.id, -1), string(b))
 	if err != nil {
 		return err
 	}
