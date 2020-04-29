@@ -58,6 +58,7 @@ Have a look at the [examples directory](examples) for some use cases
 - `search_key` (string, optional): When reading search results from the API, this key is used to identify the specific record to read. This should be a unique record such as 'name'. Similar to results_key, the value may be in the format of 'field/field/field' to search for data deeper in the returned object.
 - `search_value` (string, optional): The value of 'search_key' will be compared to this value to determine if the correct object was found. Example: if 'search_key' is 'name' and 'search_value' is 'foo', the record in the array returned by the API with name=foo will be used.
 - `results_key` (string, optional): When issuing a GET to the path, this JSON key is used to locate the results array. The format is 'field/field/field'. Example: 'results/values'. If omitted, it is assumed the results coming back are already an array and are to be used exactly as-is.
+- `update_api_data` (bool, optional): After data from the API server is read, update api_data and api_response in the state.
 
 This provider also exports the following parameters:
 - `id`: The ID of the object that is being managed.

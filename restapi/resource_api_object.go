@@ -103,6 +103,12 @@ func resourceRestApi() *schema.Resource {
 				Description: "After data from the API server is read, this map will include k/v pairs usable in other terraform resources as readable objects. Currently the value is the golang fmt package's representation of the value (simple primitives are set as expected, but complex types like arrays and maps contain golang formatting).",
 				Computed:    true,
 			},
+			"update_api_data": &schema.Schema{
+				Type:        schema.TypeBool,
+				Description: "After data from the API server is read, update api_data and api_response in the state.",
+				Optional:    true,
+				Default:     true,
+			},
 			"api_response": &schema.Schema{
 				Type:        schema.TypeString,
 				Description: "The raw body of the HTTP response from the last read of the object.",
@@ -208,7 +214,9 @@ func resourceRestApiRead(d *schema.ResourceData, meta interface{}) error {
 		/* Setting terraform ID tells terraform the object was created or it exists */
 		log.Printf("resource_api_object.go: Read resource. Returned id is '%s'\n", obj.id)
 		d.SetId(obj.id)
-		set_resource_state(obj, d)
+		if d.Get("update_api_data").(bool) {
+		    set_resource_state(obj, d)
+		}
 	}
 	return err
 }
@@ -233,7 +241,9 @@ func resourceRestApiUpdate(d *schema.ResourceData, meta interface{}) error {
 
 	err = obj.update_object()
 	if err == nil {
-		set_resource_state(obj, d)
+		if d.Get("update_api_data").(bool) {
+		    set_resource_state(obj, d)
+		}
 	}
 	return err
 }
