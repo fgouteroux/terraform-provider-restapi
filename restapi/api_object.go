@@ -24,7 +24,10 @@ type apiObjectOpts struct {
 	delete_path    string
 	search_path    string
 	debug          bool
-	read_search    map[string]string
+	read_search    bool
+	search_key     string
+	search_value   string
+	results_key    string
 	id             string
 	id_attribute   string
 	data           string
@@ -42,7 +45,10 @@ type api_object struct {
 	delete_path    string
 	search_path    string
 	debug          bool
-	read_search    map[string]string
+	read_search    bool
+	search_key     string
+	search_value   string
+	results_key    string
 	id             string
 	id_attribute   string
 
@@ -109,6 +115,9 @@ func NewAPIObject(i_client *api_client, opts *apiObjectOpts) (*api_object, error
 		search_path:    opts.search_path,
 		debug:          opts.debug,
 		read_search:    opts.read_search,
+		search_key:     opts.search_key,
+		search_value:   opts.search_value,
+		results_key:    opts.results_key,
 		id:             opts.id,
 		id_attribute:   opts.id_attribute,
 		data:           make(map[string]interface{}),
@@ -163,7 +172,10 @@ func (obj *api_object) toString() string {
 	buffer.WriteString(fmt.Sprintf("update_method: %s\n", obj.update_method))
 	buffer.WriteString(fmt.Sprintf("destroy_method: %s\n", obj.destroy_method))
 	buffer.WriteString(fmt.Sprintf("debug: %t\n", obj.debug))
-	buffer.WriteString(fmt.Sprintf("read_search: %s\n", spew.Sdump(obj.read_search)))
+	buffer.WriteString(fmt.Sprintf("read_search: %t\n", obj.read_search))
+	buffer.WriteString(fmt.Sprintf("search_key: %s\n", obj.search_key))
+	buffer.WriteString(fmt.Sprintf("search_value: %s\n", obj.search_value))
+	buffer.WriteString(fmt.Sprintf("results_key: %s\n", obj.results_key))
 	buffer.WriteString(fmt.Sprintf("data: %s\n", spew.Sdump(obj.data)))
 	buffer.WriteString(fmt.Sprintf("api_data: %s\n", spew.Sdump(obj.api_data)))
 	return buffer.String()
@@ -272,22 +284,14 @@ func (obj *api_object) read_object() error {
 		return err
 	}
 
-	search_key := obj.read_search["search_key"]
-	search_value := obj.read_search["search_value"]
-
-	if search_key != "" && search_value != "" {
-
+	if obj.read_search {
 		obj.search_path = strings.Replace(obj.get_path, "{id}", obj.id, -1)
-
-		query_string := obj.read_search["query_string"]
-		results_key := obj.read_search["results_key"]
-		obj_found, err := obj.find_object(query_string, search_key, search_value, results_key)
+		res_str_fltr, err := obj.filter_object(res_str, obj.search_key, obj.search_value, obj.results_key)
 		if err != nil {
 			obj.id = ""
 			return nil
 		}
-		obj_found_str, _ := json.Marshal(obj_found)
-		err = obj.update_state(string(obj_found_str))
+		err = obj.update_state(res_str_fltr)
 	} else {
 		err = obj.update_state(res_str)
 	}
@@ -333,9 +337,7 @@ func (obj *api_object) delete_object() error {
 	return nil
 }
 
-
-func (obj *api_object) find_object(query_string string, search_key string, search_value string, results_key string) (map[string]interface{}, error) {
-	var obj_found map[string]interface{}
+func (obj *api_object) find_object(query_string string, search_key string, search_value string, results_key string) error {
 	var data_array []interface{}
 	var ok bool
 
@@ -355,7 +357,7 @@ func (obj *api_object) find_object(query_string string, search_key string, searc
 	}
 	res_str, err := obj.api_client.send_request(obj.api_client.read_method, search_path, "")
 	if err != nil {
-		return obj_found, err
+		return err
 	}
 
 	/*
@@ -367,7 +369,7 @@ func (obj *api_object) find_object(query_string string, search_key string, searc
 	var result interface{}
 	err = json.Unmarshal([]byte(res_str), &result)
 	if err != nil {
-		return obj_found, err
+		return err
 	}
 
 	if "" != results_key {
@@ -379,22 +381,22 @@ func (obj *api_object) find_object(query_string string, search_key string, searc
 
 		/* First verify the data we got back is a hash */
 		if _, ok = result.(map[string]interface{}); !ok {
-			return obj_found, fmt.Errorf("api_object.go: The results of a GET to '%s' did not return a hash. Cannot search within for results_key '%s'", search_path, results_key)
+			return fmt.Errorf("api_object.go: The results of a GET to '%s' did not return a hash. Cannot search within for results_key '%s'", search_path, results_key)
 		}
 
 		tmp, err = GetObjectAtKey(result.(map[string]interface{}), results_key, obj.debug)
 		if err != nil {
-			return obj_found, fmt.Errorf("api_object.go: Error finding results_key: %s", err)
+			return fmt.Errorf("api_object.go: Error finding results_key: %s", err)
 		}
 		if data_array, ok = tmp.([]interface{}); !ok {
-			return obj_found, fmt.Errorf("api_object.go: The data at results_key location '%s' is not an array. It is a '%s'", results_key, reflect.TypeOf(tmp))
+			return fmt.Errorf("api_object.go: The data at results_key location '%s' is not an array. It is a '%s'", results_key, reflect.TypeOf(tmp))
 		}
 	} else {
 		if obj.debug {
 			log.Printf("api_object.go: results_key is not set - coaxing data to array of interfaces")
 		}
 		if data_array, ok = result.([]interface{}); !ok {
-			return obj_found, fmt.Errorf("api_object.go: The results of a GET to '%s' did not return an array. It is a '%s'. Perhaps you meant to add a results_key?", search_path, reflect.TypeOf(result))
+			return fmt.Errorf("api_object.go: The results of a GET to '%s' did not return an array. It is a '%s'. Perhaps you meant to add a results_key?", search_path, reflect.TypeOf(result))
 		}
 	}
 
@@ -403,7 +405,7 @@ func (obj *api_object) find_object(query_string string, search_key string, searc
 		var hash map[string]interface{}
 
 		if hash, ok = item.(map[string]interface{}); !ok {
-			return obj_found, fmt.Errorf("api_object.go: The elements being searched for data are not a map of key value pairs.")
+			return fmt.Errorf("api_object.go: The elements being searched for data are not a map of key value pairs.")
 		}
 
 		if obj.debug {
@@ -413,15 +415,14 @@ func (obj *api_object) find_object(query_string string, search_key string, searc
 
 		tmp, err := GetStringAtKey(hash, search_key, obj.debug)
 		if err != nil {
-			return obj_found, (fmt.Errorf("Failed to get the value of '%s' in the results array at '%s': %s", search_key, results_key, err))
+			return (fmt.Errorf("Failed to get the value of '%s' in the results array at '%s': %s", search_key, results_key, err))
 		}
 
 		/* We found our record */
 		if tmp == search_value {
-			obj_found = hash
 			obj.id, err = GetStringAtKey(hash, obj.id_attribute, obj.debug)
 			if err != nil {
-				return obj_found, (fmt.Errorf("Failed to find id_attribute '%s' in the record: %s", obj.id_attribute, err))
+				return (fmt.Errorf("Failed to find id_attribute '%s' in the record: %s", obj.id_attribute, err))
 			}
 
 			if obj.debug {
@@ -430,15 +431,82 @@ func (obj *api_object) find_object(query_string string, search_key string, searc
 
 			/* But there is no id attribute??? */
 			if "" == obj.id {
-				return obj_found, (errors.New(fmt.Sprintf("The object for '%s'='%s' did not have the id attribute '%s', or the value was empty.", search_key, search_value, obj.id_attribute)))
+				return (errors.New(fmt.Sprintf("The object for '%s'='%s' did not have the id attribute '%s', or the value was empty.", search_key, search_value, obj.id_attribute)))
 			}
 			break
 		}
 	}
 
 	if "" == obj.id {
-		return obj_found, (fmt.Errorf("Failed to find an object with the '%s' key = '%s' at %s", search_key, search_value, search_path))
+		return (fmt.Errorf("Failed to find an object with the '%s' key = '%s' at %s", search_key, search_value, search_path))
 	}
 
-	return obj_found, nil
+	return nil
+}
+
+func (obj *api_object) filter_object(data string, search_key string, search_value string, results_key string) (string, error)  {
+	var data_array []interface{}
+	var ok bool
+	/*
+	   Parse it seeking JSON data
+	*/
+	var result interface{}
+	err := json.Unmarshal([]byte(data), &result)
+	if err != nil {
+		return "", err
+	}
+
+	if "" != results_key {
+		var tmp interface{}
+
+		if obj.debug {
+			log.Printf("api_object.go: Locating '%s' in the results", results_key)
+		}
+
+		/* First verify the data we got back is a hash */
+		if _, ok = result.(map[string]interface{}); !ok {
+			return "", fmt.Errorf("api_object.go: The results of a GET to '%s' did not return a hash. Cannot search within for results_key '%s'", obj.search_path, results_key)
+		}
+
+		tmp, err = GetObjectAtKey(result.(map[string]interface{}), results_key, obj.debug)
+		if err != nil {
+			return "", fmt.Errorf("api_object.go: Error finding results_key: %s", err)
+		}
+		if data_array, ok = tmp.([]interface{}); !ok {
+			return "", fmt.Errorf("api_object.go: The data at results_key location '%s' is not an array. It is a '%s'", results_key, reflect.TypeOf(tmp))
+		}
+	} else {
+		if obj.debug {
+			log.Printf("api_object.go: results_key is not set - coaxing data to array of interfaces")
+		}
+		if data_array, ok = result.([]interface{}); !ok {
+			return "", fmt.Errorf("api_object.go: The results of a GET to '%s' did not return an array. It is a '%s'. Perhaps you meant to add a results_key?", obj.search_path, reflect.TypeOf(result))
+		}
+	}
+
+	/* Loop through all of the results seeking the specific record */
+	for _, item := range data_array {
+		var hash map[string]interface{}
+
+		if hash, ok = item.(map[string]interface{}); !ok {
+			return "", fmt.Errorf("api_object.go: The elements being searched for data are not a map of key value pairs.")
+		}
+
+		if obj.debug {
+			log.Printf("api_object.go: Examining %v", hash)
+			log.Printf("api_object.go:   Comparing '%s' to the value in '%s'", search_value, search_key)
+		}
+
+		tmp, err := GetStringAtKey(hash, search_key, obj.debug)
+		if err != nil {
+			return "", (fmt.Errorf("Failed to get the value of '%s' in the results array at '%s': %s", search_key, results_key, err))
+		}
+
+		/* We found our record */
+		if tmp == search_value {
+			b, _ := json.Marshal(hash)
+			return string(b), nil
+		}
+	}
+	return "", nil
 }
