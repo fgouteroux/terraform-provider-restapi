@@ -91,6 +91,11 @@ func resourceRestApi() *schema.Resource {
 				Description: "Whether to emit verbose debug output while working with the API object on the server.",
 				Optional:    true,
 			},
+			"read_search": &schema.Schema{
+				Type:        schema.TypeMap,
+				Description: "Custom search for `read_path`. This map will take `search_key`, `search_value`, `results_key` and `query_string` (see datasource config documentation)",
+				Optional:    true,
+			},
 			"api_data": &schema.Schema{
 				Type:        schema.TypeMap,
 				Elem:        &schema.Schema{Type: schema.TypeString},
@@ -329,8 +334,20 @@ func buildApiObjectOpts(d *schema.ResourceData) (*apiObjectOpts, error) {
 		opts.delete_path = v.(string)
 	}
 
+	read_search := expandReadSearch(d.Get("read_search").(map[string]interface{}))
+	opts.read_search = read_search
+
 	opts.data = d.Get("data").(string)
 	opts.debug = d.Get("debug").(bool)
 
 	return opts, nil
+}
+
+func expandReadSearch(v map[string]interface{}) (read_search map[string]string) {
+	read_search = make(map[string]string)
+	for key, val := range v {
+		read_search[key] = val.(string)
+	}
+
+	return
 }
