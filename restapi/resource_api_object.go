@@ -395,7 +395,6 @@ func buildApiObjectOpts(d *schema.ResourceData) (*apiObjectOpts, error) {
 		opts.results_key = v.(string)
 	}
 	opts.read_search = d.Get("read_search").(bool)
-	opts.data = d.Get("data").(string)
 	opts.debug = d.Get("debug").(bool)
 
 	return opts, nil
